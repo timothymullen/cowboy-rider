@@ -76,26 +76,115 @@ class PathSegment {
 
 
 function tile(i, unit) {
-    /*
-    Creates an i * unit by i * unit downwardly descending tile
-    */
-    const start_coord = i * unit;
-    const end_coord   = (i + 1) * unit;
-    const controls = [start_coord + Math.random() * unit,
-      start_coord + Math.random() * unit,
-      start_coord + Math.random() * unit,
-      start_coord + Math.random() * unit
-    ]
-    return new PathSegment(start_coord, start_coord, controls[0], controls[1], controls[2], controls[3], end_coord, end_coord);
+  /*
+  Creates an i * unit by i * unit downwardly descending tile
+  */
+  const start_coord = i * unit;
+  const end_coord   = (i + 1) * unit;
+  const controls = [start_coord + Math.random() * unit,
+    start_coord + Math.random() * unit,
+    start_coord + Math.random() * unit,
+    start_coord + Math.random() * unit
+  ]
+  return new PathSegment(start_coord, start_coord, controls[0], controls[1], controls[2], controls[3], end_coord, end_coord);
 }
 
-class Map {
+class Atlas {
   constructor(width, height) {
-    const map = [[]];
-    for (let i = 0; i < height; i++) {
-      for (let j = 0; j < width; j++) {
-      }
+    this.directions = ['n', 'nw', 'w', 'sw', 's', 'se', 'e', 'ne']
+
+    this.next_for_direction = {
+      'n':  [0, 1],
+      'ne': [-1, 1],
+      'e':  [-1, 0],
+      'se': [-1, -1],
+      's':  [0, -1],
+      'sw': [1, -1],
+      'w':  [1, 0],
+      'nw': [1, 1],
+      /*
+      this is the inverse, which might be useful sometime
+      'n':  [0, -1],
+      'ne': [1, -1],
+      'e':  [1, 0],
+      'se': [1, 1],
+      's':  [0, 1],
+      'sw': [-1, 1],
+      'w':  [-1, 0],
+      'nw': [-1, -1],
+      */
     }
+
+    this.atlas = [];
+    /* cut this when helpers are done*/
+    for (let i = 0; i < height; i++) {
+      this.atlas.push( [ new MapTile('e', 'w'), new MapTile('n', 's'), new MapTile('nw', 'sw'),
+        new MapTile('se', 'sw'), new MapTile('nw', 'sw'), new MapTile('nw', 'se') ])
+    }
+    /* endcut */
+    this.fake_atlas = this.generate_empty_atlas(6, 6)
+    this.create_path([3, 3], this.fake_atlas)
+    console.log(this.fake_atlas);
+  }
+
+  generate_empty_atlas(width, height) {
+    const generated_atlas = [];
+    for (let i = 0; i < height; i++) {
+      const generated_row = [];
+      for (let j = 0; j < width; j++) {
+        generated_row.push(0)
+      }
+      generated_atlas.push(generated_row)
+    }
+    return generated_atlas;
+  }
+
+  create_path(start_point, atlas) {
+    let point = start_point
+    let source = 'n';
+    let destination, next_delta, next_point, forbidden_destinations, allowed_destinations;
+    while (true) {
+      forbidden_destinations = [source]
+      allowed_destinations = this.directions.filter(val => ! forbidden_destinations.includes(val));
+
+      destination = this.return_random_direction(this.directions);
+      next_delta = this.next_for_direction[destination];
+      /* double check this arithmetic to make sense with how things are drawn */
+      next_point = [point[0] + next_delta[0], point[1] + next_delta[1]]
+      console.log('next_point', next_point);
+
+      if (atlas[next_point[0]] === undefined || atlas[next_point[0]][next_point[1]] === undefined) {
+        return;
+      }
+      if (atlas[next_point[0]][next_point[1]] !== 0) {
+        return;
+      }
+      atlas[point[0]][point[1]] = new MapTile(source, destination);
+      point = next_point;
+      source = this.inverse_direction(destination);
+    }
+  }
+
+  return_random_direction(directions) {
+    /* directions need not be this.directions
+    can be an already limited list of directions. */
+    return directions[Math.floor(Math.random()*directions.length)];
+  }
+
+  inverse_direction(direction) {
+    const direction_index = this.directions.indexOf(direction);
+    const inverse_index   = (this.directions.length + direction_index) % this.directions.length
+    return this.directions[inverse_index]
+  }
+
+  traverse_path() {
+  }
+}
+
+class MapTile {
+  constructor(source, destinations) {
+    this.source = source;
+    this.destinations = destinations;
   }
 }
 
@@ -105,10 +194,15 @@ class Path {
     this.num_curves = 6;
     this.num_segments = 30;
     this.curves = [];
-
+    const atlas = new Atlas(this.num_curves, this.num_curves);
+    console.log(atlas.atlas)
+    /* these for loops need to instead trace the path of the curve */
     for (let i=0; i<this.num_curves; i++) {
-      const new_curve = tile(i, this.unit);
-      this.curves.push(new_curve);
+      for (let j=0; j<this.num_curves; j++) {
+        /* these two lines should be okay, eventually need to split atlas.destinations and create a separate Path */
+        const new_curve = new_tile(i, j, this.unit, atlas.atlas[i][j].source, atlas.atlas[i][j].destinations)
+        this.curves.push(new_curve);
+      }
     }
   }
 
@@ -119,7 +213,7 @@ class Path {
 
 
     /* now blit the cowboy */
-    const divisor        = this.num_curves * this.num_segments;
+    const divisor        = this.num_curves ** 2 * this.num_segments;
 
     const frame_counter  = Math.floor((frameCount - context_switcher.start_frame) / 1.6)
     const position       = frame_counter % divisor;
@@ -145,38 +239,39 @@ class Cowboy {
   }
 }
 
-function new_tile(i, unit, orientation) {
-    const top_left = i * unit;
-    const bottom_right   = (i + 1) * unit;
-    const controls = [
-      top_left + Math.random() * unit,
-      top_left + Math.random() * unit,
-      top_left + Math.random() * unit,
-      top_left + Math.random() * unit
-    ]
-    const start_x, start_y, end_x, end_y;
-    switch(orientation) {
-      case 'se':
-        start_x = top_left;
-        start_y = top_left;
-        end_x   = bottom_right;
-        end_y   = bottom_right;
-        break;
-      case 's':
-        start_x = top_left;
-        start_y = top_left;
-        end_x   = top_left;
-        end_y   = bottom_right;
-        break;
-      case 'sw':
-        start_x = bottom_right;
-        start_y = top_left;
-        end_x   = top_left;
-        end_y   = bottom_right;
-        break;
-    }
+function get_pair_for_direction(left, top, unit, direction) {
+  const half_unit = Math.floor(unit / 2);
+  const pair_for_direction = {
+    'n':  [half_unit, 0],
+    'ne': [unit, 0],
+    'e':  [unit, half_unit],
+    'se': [unit, unit],
+    's':  [half_unit, unit],
+    'sw': [0, unit],
+    'w':  [0, half_unit],
+    'nw': [0, 0],
+  }
+  return pair_for_direction[direction];
+}
 
-    return new PathSegment(start_x, start_y, controls[0], controls[1], controls[2], controls[3], end_x, end_y);
+function new_tile(left_index, top_index, unit, source, destination) {
+  const left = left_index * unit;
+  const top = top_index * unit;
+  const controls = [
+    left + Math.random() * unit,
+    top + Math.random() * unit,
+    left + Math.random() * unit,
+    top + Math.random() * unit
+  ]
+  let start_x, start_y, end_x, end_y;
+  [start_x, start_y] = get_pair_for_direction(left_index, top_index, unit, source);
+  [end_x, end_y]     = get_pair_for_direction(left_index, top_index, unit, destination);
+  start_x += left;
+  start_y += top;
+  end_x += left;
+  end_y += top;
+
+  return new PathSegment(start_x, start_y, controls[0], controls[1], controls[2], controls[3], end_x, end_y);
 }
 
 /*
