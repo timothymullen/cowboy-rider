@@ -71,6 +71,7 @@ class PathSegment {
     strokeWeight(1);
     stroke(255, 102, 0);
     cowboy.blit(x, y);
+    translate(-x, -y);
   }
 }
 
@@ -87,8 +88,8 @@ class Atlas {
       'sw': [1, -1],
       'w':  [1, 0],
       'nw': [1, 1],
-      /*
-      this is the inverse, which might be useful sometime
+    }
+    this.previous_for_direction = {
       'n':  [0, -1],
       'ne': [1, -1],
       'e':  [1, 0],
@@ -97,10 +98,9 @@ class Atlas {
       'sw': [-1, 1],
       'w':  [-1, 0],
       'nw': [-1, -1],
-      */
     }
 
-    this.atlas = this.generate_empty_atlas(6, 6)
+    this.atlas = this.generate_empty_atlas(20, 20)
     this.path = this.create_path([3, 3], this.atlas)
     console.log(this.path, this.atlas);
   }
@@ -118,20 +118,37 @@ class Atlas {
     return generated_atlas;
   }
 
+  check_index(x, y) {
+    if (y < this.atlas.length && x < this.atlas[y].length) {
+      console.log('oh', x, y)
+      return true;
+    }
+    console.log('no', x, y)
+    return false;
+  }
+
   get_point(x, y) {
-    return this.atlas[y][x];
+    if (this.check_index(x, y)) {
+      return this.atlas[y][x];
+    }
   }
 
   get_source(x, y) {
-    return this.atlas[y][x].source;
+    if (this.check_index(x, y)) {
+      return this.atlas[y][x].source;
+    }
   }
 
   get_destination(x, y) {
-    return this.atlas[y][x].destination;
+    if (this.check_index(x, y)) {
+      return this.atlas[y][x].destinations;
+    }
   }
 
   insert_tile(x, y, tile) {
-    this.atlas[y][x] = tile;
+    if (this.check_index(x, y)) {
+      this.atlas[y][x] = tile;
+    }
   }
 
   create_path(start_point, atlas) {
@@ -143,10 +160,11 @@ class Atlas {
       forbidden_destinations = [source]
       allowed_destinations = this.directions.filter(val => ! forbidden_destinations.includes(val));
 
-      destination = this.return_random_direction(this.directions);
+      destination = this.return_random_direction(allowed_destinations);
       next_delta = this.next_for_direction[destination];
       /* double check this arithmetic to make sense with how things are drawn */
       next_point = [point[0] + next_delta[0], point[1] + next_delta[1]]
+      console.log(destination);
       tile = new MapTile(source, destination);
       console.log(tile, point[0], point[1])
       this.insert_tile(point[0], point[1], tile)
@@ -237,33 +255,45 @@ class Cowboy {
     image(this.image, x - (this.image.width / 2), y - (this.image.height / 2))
   }
 }
+function get_pair_for_direction(left, top, unit, direction) {
+  const half_unit = Math.floor(unit / 2);
+  const pair_for_direction = {
+    'n':  [-half_unit, 0],
+    'ne': [-unit, 0],
+    'e':  [-unit, -half_unit],
+    'se': [-unit, -unit],
+    's':  [-half_unit, -unit],
+    'sw': [0, -unit],
+    'w':  [0, -half_unit],
+    'nw': [0, 0],
+  }
+  const next_for_direction = {
+    'n':  [0, 1],
+    'ne': [-1, 1],
+    'e':  [-1, 0],
+    'se': [-1, -1],
+    's':  [0, -1],
+    'sw': [1, -1],
+    'w':  [1, 0],
+    'nw': [1, 1],
+  }
+  return next_for_direction[direction].map(x => x * half_unit);
+
+  return pair_for_direction[direction];
+}
 
 
 function new_tile(left_index, top_index, unit, source, destination) {
-  const get_pair_for_direction = (left, top, unit, direction) => {
-    const half_unit = Math.floor(unit / 2);
-    const pair_for_direction = {
-      'n':  [half_unit, 0],
-      'ne': [unit, 0],
-      'e':  [unit, half_unit],
-      'se': [unit, unit],
-      's':  [half_unit, unit],
-      'sw': [0, unit],
-      'w':  [0, half_unit],
-      'nw': [0, 0],
-    }
-    return pair_for_direction[direction];
-  }
   const left = left_index * unit;
   const top = top_index * unit;
   const controls = [
-    left + Math.random() * unit,
-    top + Math.random() * unit,
-    left + Math.random() * unit,
-    top + Math.random() * unit
+    left - Math.random() * unit,
+    top - Math.random() * unit,
+    left - Math.random() * unit,
+    top - Math.random() * unit
   ]
   let start_x, start_y, end_x, end_y;
-  console.log(get_pair_for_direction, left_index, top_index, unit, source);
+  console.log(get_pair_for_direction, left_index, top_index, unit, source, destination);
   [start_x, start_y] = get_pair_for_direction(left_index, top_index, unit, source);
   [end_x, end_y]     = get_pair_for_direction(left_index, top_index, unit, destination);
   start_x += left;
